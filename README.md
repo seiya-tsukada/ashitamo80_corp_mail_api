@@ -68,7 +68,7 @@ uv run ruff check . && uv run ruff format --check .
 uv run pytest
 ```
 
-依存関係を変えたら、Vercel 用の `requirements.txt` も更新してください（CI で一致を確認しています）。
+依存関係を変えたら、Vercel 用の `requirements.txt` も更新してください。
 
 ```bash
 uv export --frozen --no-dev --no-hashes --no-emit-project -o requirements.txt
@@ -82,11 +82,9 @@ Vercel の Git 連携でデプロイします（Framework Preset は「Other」�
 - main にマージすると本番にデプロイ
 - 独自ドメイン `api.ashitamo80.com` を Vercel に追加し、Google Workspace の DNS に CNAME を登録
 
-GitHub Actions（`.github/workflows/ci.yml`）では lint とテストだけを実行します。
-
 ## 初期設定チェックリスト
 
 - [ ] Resend: `ashitamo80.com` を登録し、DKIM / SPF / MX レコードを DNS に追加、API キーを発行
 - [ ] Turnstile: サイトを作成（ホスト名 `www.ashitamo80.com`）し、サイトキーとシークレットを取得
 - [ ] Vercel: リポジトリをインポートし、環境変数とドメインを設定
-- [ ] main ブランチを保護（PR と CI 成功を必須にする）
+- [ ] main ブランチを保護（PR を必須にする）
