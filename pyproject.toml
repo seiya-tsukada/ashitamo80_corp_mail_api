@@ -1,0 +1,32 @@
+[project]
+name = "ashitamo80-corp-mail-api"
+version = "0.1.0"
+description = "コーポレートサイトのお問い合わせフォーム受付 API（Vercel / FastAPI / Resend）"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi",
+    "httpx",
+    "pydantic[email]",
+    "resend",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "ruff",
+    "uvicorn",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
