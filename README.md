@@ -1,0 +1,1 @@
+# ashitamo80_corp_mail_api
