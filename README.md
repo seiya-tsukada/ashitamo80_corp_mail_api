@@ -30,7 +30,11 @@ www.ashitamo80.com（S3 / CloudFront）
 | 200 | `{"ok": true}` | 受付完了 |
 | 400 | `{"ok": false, "error": "invalid", "fields": [...]}` | 入力エラー（`fields` は該当する項目名） |
 | 403 | `{"ok": false, "error": "captcha"}` | Turnstile の検証に失敗 |
+| 413 | `{"ok": false, "error": "too_large"}` | リクエストが 32KB を超えている |
+| 500 | `{"ok": false, "error": "server_error"}` | 必須の環境変数が未設定（ログに変数名を出力） |
 | 502 | `{"ok": false, "error": "send_failed"}` | メール送信に失敗 |
+
+`company` / `name` / `size` / `topic` は改行・タブ・制御文字・bidi 制御文字を、`body` は改行とタブ以外の制御文字を受け付けません。
 
 項目を変更するときは、**API を先にデプロイしてからフロントを変更**します。新旧どちらの形式でも受け付ける状態を経由してください。
 
