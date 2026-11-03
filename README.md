@@ -1,12 +1,11 @@
 # ashitamo80_corp_mail_api
 
 コーポレートサイト（[ashitamo80_corp](https://github.com/seiya-tsukada/ashitamo80_corp)、S3 / CloudFront）のお問い合わせフォームを受け付ける API です。
-Vercel 上の Python 関数（FastAPI）として動き、Cloudflare Turnstile でボットを判定したうえで、Resend で社内宛てに通知メールを送ります。
+Vercel 上の Python 関数（FastAPI）として動き、ハニーポット（`website` 項目）でボットを除いたうえで、Resend で社内宛てに通知メールを送ります。
 
 ```
 www.ashitamo80.com（S3 / CloudFront）
   └─ fetch POST ─▶ api.ashitamo80.com/api/contact（Vercel・このリポジトリ）
-                     ├─ Turnstile siteverify
                      └─ Resend ─▶ CONTACT_TO
 ```
 
@@ -23,13 +22,13 @@ www.ashitamo80.com（S3 / CloudFront）
 | `topic` | | ご相談内容（60文字まで） |
 | `body` | ○ | ご相談の概要（4000文字まで） |
 | `website` | | honeypot。人間には見えない入力欄で、値があれば送信せずに成功を返す |
-| `turnstile_token` | ○ | Turnstile ウィジェットのトークン（`cf-turnstile-response` の値） |
+
+上記以外の項目（旧フロントの `turnstile_token` など）は無視します。
 
 | ステータス | レスポンス | 意味 |
 | --- | --- | --- |
 | 200 | `{"ok": true}` | 受付完了 |
 | 400 | `{"ok": false, "error": "invalid", "fields": [...]}` | 入力エラー（`fields` は該当する項目名） |
-| 403 | `{"ok": false, "error": "captcha"}` | Turnstile の検証に失敗 |
 | 413 | `{"ok": false, "error": "too_large"}` | リクエストが 32KB を超えている |
 | 500 | `{"ok": false, "error": "server_error"}` | 必須の環境変数が未設定（ログに変数名を出力） |
 | 502 | `{"ok": false, "error": "send_failed"}` | メール送信に失敗 |
@@ -45,10 +44,8 @@ Vercel の Settings → Environment Variables で、Production と Preview / Dev
 | 変数 | Production | Preview / Development |
 | --- | --- | --- |
 | `RESEND_API_KEY` | 本番キー | 同じキーでも可 |
-| `TURNSTILE_SECRET_KEY` | 本番のシークレット | テスト用 `1x0000000000000000000000000000000AA`（常に成功） |
-| `TURNSTILE_HOSTNAMES` | `www.ashitamo80.com` | 空（hostname を確認しない） |
 | `CONTACT_TO` | 受信アドレス（カンマ区切りで複数可） | 開発者のアドレス |
-| `ALLOWED_ORIGINS` | `https://www.ashitamo80.com` | `http://localhost:8000` |
+| `EXTRA_ORIGINS` | 設定しない | 省略可（ローカル確認用。例: `http://localhost:8000`、カンマ区切りで複数可） |
 | `MAIL_FROM` | 省略可（既定: `アシタモハレ お問い合わせ <noreply@ashitamo80.com>`） | 同左 |
 
 ## ローカル開発
@@ -85,6 +82,5 @@ Vercel の Git 連携でデプロイします（Framework Preset は「Other」�
 ## 初期設定チェックリスト
 
 - [ ] Resend: `ashitamo80.com` を登録し、DKIM / SPF / MX レコードを DNS に追加、API キーを発行
-- [ ] Turnstile: サイトを作成（ホスト名 `www.ashitamo80.com`）し、サイトキーとシークレットを取得
 - [ ] Vercel: リポジトリをインポートし、環境変数とドメインを設定
 - [ ] main ブランチを保護（PR を必須にする）

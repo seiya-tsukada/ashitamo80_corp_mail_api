@@ -1,27 +1,28 @@
 """コーポレートサイトのお問い合わせフォーム受付 API（POST /api/contact）。
 
 Vercel は api/ 配下の各ファイルを関数として公開する。このファイルは
-FastAPI の `app` を公開し、Turnstile 検証のあと Resend で社内宛てに通知メールを送る。
+FastAPI の `app` を公開し、ハニーポットで bot を除いたうえで Resend で社内宛てに通知メールを送る。
 """
 
 import logging
 import os
 from typing import Annotated
 
-import httpx
 import resend
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, EmailStr, Field, StringConstraints
+from pydantic import BaseModel, EmailStr, StringConstraints
 
 logger = logging.getLogger(__name__)
 
-TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
 MAIL_FROM = os.environ.get("MAIL_FROM", "アシタモハレ お問い合わせ <noreply@ashitamo80.com>")
 # フォームの JSON はこれで十分収まる。大きな本文でメモリや Resend の上限を圧迫させない
 MAX_BODY_BYTES = 32 * 1024
+
+# CORS で許可する送信元。本番サイトだけで当面変わらないのでコードで持つ
+ALLOWED_ORIGINS = ["https://www.ashitamo80.com"]
 
 # Resend SDK の既定タイムアウト（30 秒）は関数の実行時間に対して長いので短くする
 resend.default_http_client = resend.RequestsClient(timeout=10)
@@ -66,13 +67,13 @@ class Contact(BaseModel):
     body: Annotated[MultiLine, StringConstraints(min_length=1, max_length=4000)]
     # honeypot（人間には見えない入力欄）。長さで 400 を返すとボットに気付かれるので上限を設けない
     website: str = ""
-    turnstile_token: str = Field(min_length=1, max_length=2048)
 
 
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_env_list("ALLOWED_ORIGINS"),
+    # EXTRA_ORIGINS はローカル確認用（本番の Vercel には設定しない）
+    allow_origins=ALLOWED_ORIGINS + _env_list("EXTRA_ORIGINS"),
     allow_methods=["POST"],
     allow_headers=["Content-Type"],
 )
@@ -102,31 +103,6 @@ def _misconfigured(_: Request, exc: ConfigError) -> JSONResponse:
     # 変数名だけ記録し、利用者には詳細を返さない
     logger.error("missing environment variable: %s", exc)
     return JSONResponse({"ok": False, "error": "server_error"}, status_code=500)
-
-
-def _client_ip(request: Request) -> str | None:
-    # Vercel は x-real-ip / x-forwarded-for をクライアントの値で上書きするので信頼できる
-    ip = request.headers.get("x-real-ip") or request.headers.get("x-forwarded-for", "")
-    return ip.split(",")[0].strip() or None
-
-
-def verify_turnstile(token: str, remote_ip: str | None) -> bool:
-    data = {"secret": _require_env("TURNSTILE_SECRET_KEY"), "response": token}
-    if remote_ip:
-        data["remoteip"] = remote_ip
-    try:
-        res = httpx.post(TURNSTILE_VERIFY_URL, data=data, timeout=5)
-        res.raise_for_status()
-        result = res.json()
-    except (httpx.HTTPError, ValueError) as e:
-        # 失敗時は通さない（fail closed）
-        logger.error("turnstile verify failed: %s", type(e).__name__)
-        return False
-    if result.get("success") is not True:
-        return False
-    # 空なら hostname は確認しない（Preview 環境でテスト用キーを使う場合）
-    hostnames = _env_list("TURNSTILE_HOSTNAMES")
-    return not hostnames or result.get("hostname") in hostnames
 
 
 def build_email(c: Contact, to: list[str]) -> resend.Emails.SendParams:
@@ -164,13 +140,10 @@ def send_mail(c: Contact) -> str:
 
 
 @app.post("/api/contact")
-def contact(c: Contact, request: Request) -> JSONResponse:
+def contact(c: Contact) -> JSONResponse:
     if c.website:
         # ボットには成功したように見せる
         return JSONResponse({"ok": True})
-
-    if not verify_turnstile(c.turnstile_token, _client_ip(request)):
-        return JSONResponse({"ok": False, "error": "captcha"}, status_code=403)
 
     try:
         email_id = send_mail(c)
