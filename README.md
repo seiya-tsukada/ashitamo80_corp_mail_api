@@ -45,7 +45,7 @@ Vercel の Settings → Environment Variables で、Production と Preview / Dev
 | --- | --- | --- |
 | `RESEND_API_KEY` | 本番キー | 同じキーでも可 |
 | `CONTACT_TO` | 受信アドレス（カンマ区切りで複数可） | 開発者のアドレス |
-| `ALLOWED_ORIGINS` | `https://www.ashitamo80.com`（末尾スラッシュなし） | `http://localhost:8000` |
+| `EXTRA_ORIGINS` | 設定しない | 省略可（ローカル確認用。例: `http://localhost:8000`、カンマ区切りで複数可） |
 | `MAIL_FROM` | 省略可（既定: `アシタモハレ お問い合わせ <noreply@ashitamo80.com>`） | 同左 |
 
 ## ローカル開発

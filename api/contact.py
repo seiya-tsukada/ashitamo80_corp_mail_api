@@ -21,6 +21,9 @@ MAIL_FROM = os.environ.get("MAIL_FROM", "アシタモハレ お問い合わせ <
 # フォームの JSON はこれで十分収まる。大きな本文でメモリや Resend の上限を圧迫させない
 MAX_BODY_BYTES = 32 * 1024
 
+# CORS で許可する送信元。本番サイトだけで当面変わらないのでコードで持つ
+ALLOWED_ORIGINS = ["https://www.ashitamo80.com"]
+
 # Resend SDK の既定タイムアウト（30 秒）は関数の実行時間に対して長いので短くする
 resend.default_http_client = resend.RequestsClient(timeout=10)
 
@@ -69,7 +72,8 @@ class Contact(BaseModel):
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_env_list("ALLOWED_ORIGINS"),
+    # EXTRA_ORIGINS はローカル確認用（本番の Vercel には設定しない）
+    allow_origins=ALLOWED_ORIGINS + _env_list("EXTRA_ORIGINS"),
     allow_methods=["POST"],
     allow_headers=["Content-Type"],
 )

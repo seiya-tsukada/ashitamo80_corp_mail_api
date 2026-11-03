@@ -1,3 +1,5 @@
+import importlib
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -52,6 +54,47 @@ def test_preflight_other_origin(client):
         headers={"Origin": "https://evil.example", "Access-Control-Request-Method": "POST"},
     )
     assert "access-control-allow-origin" not in res.headers
+
+
+def test_post_other_origin(client, sent):
+    res = client.post("/api/contact", json=VALID, headers={"Origin": "https://evil.example"})
+    assert "access-control-allow-origin" not in res.headers
+
+
+def _preflight(app, origin):
+    return TestClient(app).options(
+        "/api/contact",
+        headers={"Origin": origin, "Access-Control-Request-Method": "POST"},
+    )
+
+
+@pytest.fixture
+def reload_with_env(monkeypatch):
+    # 許可オリジンは import 時に読まれるので、環境変数を変えてモジュールを読み直す
+    def reload(**env):
+        for k, v in env.items():
+            monkeypatch.setenv(k, v)
+        return importlib.reload(mod)
+
+    yield reload
+    monkeypatch.undo()
+    importlib.reload(mod)
+
+
+def test_extra_origins_unset_allows_only_production(reload_with_env, monkeypatch):
+    monkeypatch.delenv("EXTRA_ORIGINS", raising=False)
+    m = reload_with_env()
+    assert m.ALLOWED_ORIGINS == [ORIGIN]
+    assert "access-control-allow-origin" not in _preflight(m.app, "http://localhost:8000").headers
+
+
+def test_extra_origins_allows_local(reload_with_env):
+    m = reload_with_env(EXTRA_ORIGINS="http://localhost:8000, http://127.0.0.1:8000")
+    for origin in [ORIGIN, "http://localhost:8000", "http://127.0.0.1:8000"]:
+        res = _preflight(m.app, origin)
+        assert res.status_code == 200
+        assert res.headers["access-control-allow-origin"] == origin
+    assert "access-control-allow-origin" not in _preflight(m.app, "https://evil.example").headers
 
 
 @pytest.mark.parametrize(
