@@ -1,4 +1,3 @@
-import httpx
 import pytest
 from fastapi.testclient import TestClient
 
@@ -14,7 +13,6 @@ VALID = {
     "topic": "協業・新規事業のご相談",
     "body": "相談したいことがあります。",
     "website": "",
-    "turnstile_token": "token",
 }
 
 
@@ -26,7 +24,6 @@ def client():
 @pytest.fixture
 def sent(monkeypatch):
     calls = []
-    monkeypatch.setattr(mod, "verify_turnstile", lambda token, ip: token == "token")
     monkeypatch.setattr(mod, "send_mail", calls.append)
     return calls
 
@@ -84,16 +81,7 @@ def test_honeypot_is_silently_dropped(client, sent):
     assert sent == []
 
 
-def test_captcha_failed(client, sent):
-    res = client.post("/api/contact", json={**VALID, "turnstile_token": "bad"})
-    assert res.status_code == 403
-    assert res.json()["error"] == "captcha"
-    assert sent == []
-
-
 def test_send_failed(client, monkeypatch):
-    monkeypatch.setattr(mod, "verify_turnstile", lambda token, ip: True)
-
     def boom(_):
         raise RuntimeError("resend down")
 
@@ -131,24 +119,6 @@ def test_security_headers(client, sent):
     assert res.headers["x-content-type-options"] == "nosniff"
 
 
-def test_client_ip_prefers_real_ip(client, monkeypatch):
-    seen = []
-    monkeypatch.setattr(mod, "verify_turnstile", lambda token, ip: seen.append(ip))
-    client.post(
-        "/api/contact",
-        json=VALID,
-        headers={"x-real-ip": "203.0.113.1", "x-forwarded-for": "198.51.100.1, 10.0.0.1"},
-    )
-    assert seen == ["203.0.113.1"]
-
-
-def test_missing_turnstile_secret(client, monkeypatch):
-    monkeypatch.delenv("TURNSTILE_SECRET_KEY", raising=False)
-    res = client.post("/api/contact", json=VALID)
-    assert res.status_code == 500
-    assert res.json() == {"ok": False, "error": "server_error"}
-
-
 @pytest.fixture
 def resend_send(monkeypatch):
     calls = []
@@ -160,7 +130,6 @@ def resend_send(monkeypatch):
     monkeypatch.setenv("RESEND_API_KEY", "re_test")
     monkeypatch.setenv("CONTACT_TO", "a@example.com, b@example.com")
     monkeypatch.setattr(mod.resend.Emails, "send", fake_send)
-    monkeypatch.setattr(mod, "verify_turnstile", lambda token, ip: True)
     return calls
 
 
@@ -196,37 +165,15 @@ def test_resend_error(client, resend_send, monkeypatch):
     assert res.json()["error"] == "send_failed"
 
 
-class _Res:
-    def __init__(self, payload, status_code=200):
-        self.payload = payload
-        self.status_code = status_code
-
-    def raise_for_status(self):
-        if self.status_code >= 400:
-            raise httpx.HTTPStatusError("error", request=None, response=None)
-
-    def json(self):
-        return self.payload
+def test_turnstile_token_is_ignored(client, sent):
+    # 旧フロントが turnstile_token を送ってきても無視して受け付ける
+    res = client.post("/api/contact", json={**VALID, "turnstile_token": "x"})
+    assert res.status_code == 200
+    assert len(sent) == 1
 
 
-@pytest.mark.parametrize(
-    "hostnames, payload, expected",
-    [
-        ("www.ashitamo80.com", {"success": True, "hostname": "www.ashitamo80.com"}, True),
-        ("www.ashitamo80.com", {"success": True, "hostname": "evil.example"}, False),
-        ("", {"success": True, "hostname": "example.com"}, True),
-        ("", {"success": False}, False),
-        ("", {"success": "true"}, False),
-    ],
-)
-def test_verify_turnstile(monkeypatch, hostnames, payload, expected):
-    monkeypatch.setenv("TURNSTILE_SECRET_KEY", "secret")
-    monkeypatch.setenv("TURNSTILE_HOSTNAMES", hostnames)
-    monkeypatch.setattr(mod.httpx, "post", lambda *a, **kw: _Res(payload))
-    assert mod.verify_turnstile("token", None) is expected
-
-
-def test_verify_turnstile_http_error(monkeypatch):
-    monkeypatch.setenv("TURNSTILE_SECRET_KEY", "secret")
-    monkeypatch.setattr(mod.httpx, "post", lambda *a, **kw: _Res({"success": True}, 500))
-    assert mod.verify_turnstile("token", None) is False
+def test_missing_resend_key(client, monkeypatch):
+    monkeypatch.delenv("RESEND_API_KEY", raising=False)
+    res = client.post("/api/contact", json=VALID)
+    assert res.status_code == 500
+    assert res.json() == {"ok": False, "error": "server_error"}
