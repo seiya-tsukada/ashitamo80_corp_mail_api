@@ -126,7 +126,7 @@ def build_email(c: Contact, to: list[str]) -> resend.Emails.SendParams:
         "from": MAIL_FROM,
         "to": to,
         "reply_to": str(c.email),
-        "subject": f"【お問い合わせ】{c.company} {c.name} 様",
+        "subject": f"【お問い合わせ】{c.company} / {c.name} 様",
         "text": text,
     }
 
