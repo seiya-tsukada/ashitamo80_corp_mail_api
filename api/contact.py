@@ -17,7 +17,8 @@ from pydantic import BaseModel, EmailStr, StringConstraints
 
 logger = logging.getLogger(__name__)
 
-MAIL_FROM = os.environ.get("MAIL_FROM", "アシタモハレ お問い合わせ <noreply@ashitamo80.com>")
+# 送信元。社内宛ての通知だけなので当面変わらず、コードで持つ（返信は reply_to で問い合わせ元に届く）
+MAIL_FROM = "アシタモハレ お問い合わせ <info@ashitamo80.com>"
 # フォームの JSON はこれで十分収まる。大きな本文でメモリや Resend の上限を圧迫させない
 MAX_BODY_BYTES = 32 * 1024
 
